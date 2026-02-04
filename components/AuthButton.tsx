@@ -3,11 +3,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import Image from 'next/image';
+import GlobalLeaderboard from './GlobalLeaderboard';
+import { Trophy, LogOut, User as UserIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export default function AuthButton() {
+interface AuthButtonProps {
+  onShowLeaderboard?: () => void;
+}
+
+export default function AuthButton({ onShowLeaderboard }: AuthButtonProps) {
   const { user, loading, signInWithGoogle, signOut } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showGlobalLeaderboard, setShowGlobalLeaderboard] = useState(false);
 
   const handleSignIn = async () => {
     setIsSigningIn(true);
@@ -25,6 +34,15 @@ export default function AuthButton() {
     await signOut();
   };
 
+  const handleShowLeaderboard = () => {
+    setShowDropdown(false);
+    if (onShowLeaderboard) {
+      onShowLeaderboard();
+    } else {
+      setShowGlobalLeaderboard(true);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
@@ -33,58 +51,83 @@ export default function AuthButton() {
 
   if (user) {
     return (
-      <div className="relative">
-        <button
-          onClick={() => setShowDropdown(!showDropdown)}
-          className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-        >
-          {user.photoURL ? (
-            <Image
-              src={user.photoURL}
-              alt={user.displayName || 'User'}
-              width={36}
-              height={36}
-              className="rounded-full border-2 border-primary"
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold">
-              {user.displayName?.charAt(0) || user.email?.charAt(0) || '?'}
-            </div>
-          )}
-        </button>
+      <>
+        <div className="relative">
+          <button
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
+          >
+            {user.photoURL ? (
+              <Image
+                src={user.photoURL}
+                alt={user.displayName || 'User'}
+                width={36}
+                height={36}
+                className="rounded-full border-2 border-primary"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                {user.displayName?.charAt(0) || user.email?.charAt(0) || '?'}
+              </div>
+            )}
+          </button>
 
-        {showDropdown && (
-          <>
-            {/* Backdrop */}
-            <div 
-              className="fixed inset-0 z-40" 
-              onClick={() => setShowDropdown(false)}
-            />
-            
-            {/* Dropdown */}
-            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-              <div className="p-4 border-b border-slate-100 dark:border-slate-700">
-                <p className="font-bold text-slate-800 dark:text-white truncate">
-                  {user.displayName || 'User'}
-                </p>
-                <p className="text-sm text-slate-500 truncate">
-                  {user.email}
-                </p>
-              </div>
-              
-              <div className="p-2">
-                <button
-                  onClick={handleSignOut}
-                  className="w-full px-4 py-2.5 text-left text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
+          <AnimatePresence>
+            {showDropdown && (
+              <>
+                {/* Backdrop */}
+                <div 
+                  className="fixed inset-0 z-40 bg-transparent" 
+                  onClick={() => setShowDropdown(false)}
+                />
+                
+                {/* Dropdown */}
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute right-0 mt-2 w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-xl shadow-xl border border-white/20 dark:border-white/10 z-50 overflow-hidden"
                 >
-                  <span>🚪</span>
-                  <span>Keluar</span>
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                    <p className="font-bold text-slate-800 dark:text-white truncate flex items-center gap-2">
+                       <UserIcon className="w-4 h-4 text-primary" />
+                      {user.displayName || 'User'}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                      {user.email}
+                    </p>
+                  </div>
+                  
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={handleShowLeaderboard}
+                      className="w-full px-4 py-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors flex items-center gap-2.5 font-medium group"
+                    >
+                      <Trophy className="w-4 h-4 group-hover:text-amber-500 transition-colors" />
+                      <span>Global Leaderboard</span>
+                    </button>
+                    
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full px-4 py-2.5 text-left text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2.5 font-medium"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Keluar</span>
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <AnimatePresence>
+          {showGlobalLeaderboard && (
+            <GlobalLeaderboard key="leaderboard" onClose={() => setShowGlobalLeaderboard(false)} />
+          )}
+        </AnimatePresence>
+      </>
     );
   }
 
@@ -92,7 +135,11 @@ export default function AuthButton() {
     <button
       onClick={handleSignIn}
       disabled={isSigningIn}
-      className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+      className={cn(
+        "flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full",
+        "hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 shadow-sm",
+        "focus:outline-none focus:ring-2 focus:ring-slate-200"
+      )}
     >
       {isSigningIn ? (
         <div className="w-5 h-5 border-2 border-slate-300 border-t-primary rounded-full animate-spin" />

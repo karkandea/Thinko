@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 interface ChimpTestProps {
   onComplete: (level: number, maxStreak: number) => void;
+  onScoreUpdate?: (level: number, maxStreak: number) => void;
   isPaused?: boolean;
 }
 
@@ -15,7 +16,7 @@ const getLevelConfig = (level: number) => ({
   gridRows: level <= 4 ? 4 : level <= 8 ? 5 : 6,
 });
 
-export default function ChimpTest({ onComplete, isPaused = false }: ChimpTestProps) {
+export default function ChimpTest({ onComplete, onScoreUpdate, isPaused = false }: ChimpTestProps) {
   const [level, setLevel] = useState(1);
   const [lives, setLives] = useState(3);
   const [maxLevel, setMaxLevel] = useState(1);
@@ -94,6 +95,11 @@ export default function ChimpTest({ onComplete, isPaused = false }: ChimpTestPro
         // Level Complete
         const newLevel = level + 1;
         if (newLevel > maxLevel) setMaxLevel(newLevel);
+        
+        // Report score for real-time tracking
+        if (onScoreUpdate) {
+          onScoreUpdate(newLevel, maxStreak);
+        }
         
         setGameState('levelUp');
         

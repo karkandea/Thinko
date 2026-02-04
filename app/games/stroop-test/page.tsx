@@ -1,51 +1,67 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useCallback, useEffect } from 'react';
 import GameContainer from '@/components/GameContainer';
+import GameLobby from '@/components/GameLobby';
 import StroopTest from '@/games/StroopTest';
 import CompletionScreen from '@/components/CompletionScreen';
 import TutorialModal from '@/components/TutorialModal';
 import Leaderboard from '@/components/Leaderboard';
 import { PauseOverlay, StopConfirmModal } from '@/components/GameControls';
 import { useAuth } from '@/lib/auth-context';
-import { saveGameScore, getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
+import { useBestScoreTracker } from '@/lib/useBestScoreTracker';
+import { getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
 
 export default function StroopTestPage() {
-  const router = useRouter();
   const { user } = useAuth();
-  const [gameState, setGameState] = useState<'tutorial' | 'playing' | 'completed'>('tutorial');
+  const [gameState, setGameState] = useState<'lobby' | 'tutorial' | 'playing' | 'completed'>('lobby');
   const [lastScore, setLastScore] = useState(0);
   const [lastAccuracy, setLastAccuracy] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (user && gameState === 'playing') {
+      getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
+    }
+  }, [user, gameState]);
+
+  const { personalBest, isNewRecord, reportScore, resetNewRecordFlag } = useBestScoreTracker({
+    gameSlug: 'stroop-test',
+    lowerIsBetter: false,
+  });
+
+  const handlePlay = () => {
+    setGameState('tutorial');
+    resetNewRecordFlag();
+  };
 
   const handleTutorialClose = () => {
     setGameState('playing');
   };
 
+  const handleScoreUpdate = useCallback((score: number, accuracy: number) => {
+    reportScore(score, { accuracy });
+  }, [reportScore]);
+
   const handleComplete = async (score: number, accuracy: number) => {
     setLastScore(score);
     setLastAccuracy(accuracy);
     setGameState('completed');
-
+    reportScore(score, { accuracy });
     if (user) {
-      setIsSaving(true);
-      try {
-        await getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
-        await saveGameScore(user.uid, 'stroop-test', score, undefined, accuracy);
-        await incrementGamesPlayed(user.uid);
-      } catch (error) {
-        console.error('Failed to save score:', error);
-      } finally {
-        setIsSaving(false);
-      }
+      await incrementGamesPlayed(user.uid);
     }
   };
 
   const handlePlayAgain = () => {
     setGameState('tutorial');
+    setIsPaused(false);
+    resetNewRecordFlag();
+  };
+
+  const handleBackToLobby = () => {
+    setGameState('lobby');
     setIsPaused(false);
   };
 
@@ -58,7 +74,7 @@ export default function StroopTestPage() {
 
   const handleStopConfirm = () => {
     setShowStopConfirm(false);
-    router.push('/');
+    setGameState('lobby');
   };
 
   const handleStopCancel = () => {
@@ -72,6 +88,19 @@ export default function StroopTestPage() {
     if (lastScore >= 50) return 'average';
     return 'tryAgain';
   };
+
+  if (gameState === 'lobby') {
+    return (
+      <GameLobby
+        gameSlug="stroop-test"
+        gameTitle="Tes Stroop"
+        gameDescription="Pilih warna tinta, bukan kata yang tertulis. Uji kemampuan fokus otakmu!"
+        gameIcon="🎨"
+        onPlay={handlePlay}
+        scoreFormatter={(s) => `${s} poin`}
+      />
+    );
+  }
 
   return (
     <GameContainer 
@@ -88,7 +117,11 @@ export default function StroopTestPage() {
       
       {gameState === 'playing' && (
         <>
-          <StroopTest onComplete={handleComplete} isPaused={isPaused} />
+          <StroopTest 
+            onComplete={handleComplete} 
+            onScoreUpdate={handleScoreUpdate}
+            isPaused={isPaused} 
+          />
           {isPaused && !showStopConfirm && <PauseOverlay onResume={handleResume} />}
         </>
       )}
@@ -100,10 +133,19 @@ export default function StroopTestPage() {
             scoreDisplay={`${lastScore} Poin`}
             onPlayAgain={handlePlayAgain}
             rating={getRating()}
-            extraStats={[{ label: 'Accuracy', value: `${lastAccuracy}%` }]}
+            isNewRecord={isNewRecord}
+            extraStats={[
+              { label: 'Accuracy', value: `${lastAccuracy}%` },
+              ...(personalBest ? [{ label: 'Best', value: `${personalBest} poin` }] : []),
+            ]}
           />
-          {isSaving && <p className="text-center text-sm text-slate-500">Menyimpan skor...</p>}
           <Leaderboard gameSlug="stroop-test" gameTitle="Tes Stroop" scoreFormatter={(s) => `${s} poin`} />
+          <button
+            onClick={handleBackToLobby}
+            className="w-full py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-medium transition-colors"
+          >
+            ← Kembali ke Lobby
+          </button>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 interface StroopTestProps {
   onComplete: (score: number, accuracy: number) => void;
+  onScoreUpdate?: (score: number, accuracy: number) => void;
   isPaused?: boolean;
 }
 
@@ -30,7 +31,7 @@ const getLevelConfig = (correctCount: number) => {
   };
 };
 
-export default function StroopTest({ onComplete, isPaused = false }: StroopTestProps) {
+export default function StroopTest({ onComplete, onScoreUpdate, isPaused = false }: StroopTestProps) {
   const [currentWord, setCurrentWord] = useState(COLORS[0]);
   const [inkColor, setInkColor] = useState(COLORS[1]);
   const [correct, setCorrect] = useState(0);
@@ -121,7 +122,16 @@ export default function StroopTest({ onComplete, isPaused = false }: StroopTestP
       // Streak bonus
       if (newStreak >= 5) pointsEarned += 10;
       
-      setScore(s => s + pointsEarned);
+      setScore(s => {
+        const newScore = s + pointsEarned;
+        // Report score for real-time tracking
+        if (onScoreUpdate) {
+          const total = correct + 1 + wrong;
+          const currentAccuracy = total > 0 ? Math.round(((correct + 1) / total) * 100) : 0;
+          onScoreUpdate(newScore, currentAccuracy);
+        }
+        return newScore;
+      });
       
       // Haptic
       if (typeof navigator !== 'undefined' && navigator.vibrate) {

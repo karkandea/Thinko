@@ -1,6 +1,9 @@
 'use client';
 
 import React from 'react';
+import { Play, Pause, Square, AlertOctagon } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface GameControlsProps {
   isPaused: boolean;
@@ -17,64 +20,38 @@ export default function GameControls({
   onStop,
   showPause = true 
 }: GameControlsProps) {
-  return (
-    <div className="flex items-center gap-2">
-      {showPause && (
-        <button
-          onClick={isPaused ? onResume : onPause}
-          className={`
-            p-2 rounded-lg transition-all active:scale-95
-            ${isPaused 
-              ? 'bg-primary text-white' 
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-            }
-          `}
-          title={isPaused ? 'Lanjutkan' : 'Pause'}
-        >
-          {isPaused ? (
-            // Play icon
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          ) : (
-            // Pause icon
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-            </svg>
-          )}
-        </button>
-      )}
-      
-      <button
-        onClick={onStop}
-        className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-all active:scale-95"
-        title="Berhenti"
-      >
-        {/* Stop icon */}
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 6h12v12H6z"/>
-        </svg>
-      </button>
-    </div>
-  );
+  // Logic moved to parent container for unified header controls
+  return null;
 }
 
 // Pause Overlay Component
 export function PauseOverlay({ onResume }: { onResume: () => void }) {
   return (
-    <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-40 animate-in fade-in duration-200">
-      <div className="text-center">
-        <div className="text-6xl mb-4">⏸️</div>
-        <h2 className="text-2xl font-bold text-white mb-2">Game Dipause</h2>
-        <p className="text-slate-400 mb-6">Klik untuk lanjutkan</p>
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-6"
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="text-center"
+      >
+        <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm border border-white/20">
+           <Pause className="w-10 h-10 text-white fill-current" />
+        </div>
+        <h2 className="text-3xl font-black text-white mb-2 tracking-tight">Game Paused</h2>
+        <p className="text-white/60 mb-8 font-medium">Take a breath, resume when ready</p>
         <button
           onClick={onResume}
-          className="px-8 py-3 bg-primary hover:bg-teal-700 text-white font-bold rounded-xl transition-all active:scale-95"
+          className="px-8 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-100 transition-all active:scale-95 flex items-center gap-2 mx-auto shadow-xl"
         >
-          Lanjutkan
+          <Play className="w-5 h-5 fill-current" />
+          RESUME
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -87,33 +64,40 @@ export function StopConfirmModal({
   onCancel: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-white/20 dark:border-slate-800"
+      >
         <div className="text-center mb-6">
-          <div className="text-5xl mb-3">🛑</div>
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
-            Berhenti Main?
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 dark:text-red-400">
+            <AlertOctagon className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+            Quit Game?
           </h2>
-          <p className="text-slate-600 dark:text-slate-400 text-sm">
-            Progress kamu di game ini akan hilang. Yakin mau berhenti?
+          <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
+            Your current progress will be lost. Are you sure you want to return to lobby?
           </p>
         </div>
         
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all active:scale-95"
+            className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95"
           >
-            Lanjut Main
+            Keep Playing
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-3 bg-red-500 text-white font-semibold rounded-xl hover:bg-red-600 transition-all active:scale-95"
+            className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-all active:scale-95 shadow-lg shadow-red-500/30"
           >
-            Berhenti
+            Quit
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 interface RapidMathProps {
   onComplete: (score: number, accuracy: number) => void;
+  onScoreUpdate?: (score: number, accuracy: number) => void;
   isPaused?: boolean;
 }
 
@@ -21,7 +22,7 @@ const getLevelConfig = (correctCount: number) => {
   };
 };
 
-export default function RapidMath({ onComplete, isPaused = false }: RapidMathProps) {
+export default function RapidMath({ onComplete, onScoreUpdate, isPaused = false }: RapidMathProps) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(0);
   const [userAnswer, setUserAnswer] = useState<string>('');
@@ -126,7 +127,15 @@ export default function RapidMath({ onComplete, isPaused = false }: RapidMathPro
     if (numVal === answer) {
       // Correct!
       setFeedback('correct');
-      setCorrect(c => c + 1);
+      setCorrect(c => {
+        const newCorrect = c + 1;
+        // Report score for real-time tracking
+        if (onScoreUpdate) {
+          const newAccuracy = (totalQuestions + 1) > 0 ? Math.round((newCorrect / (totalQuestions + 1)) * 100) : 0;
+          onScoreUpdate(newCorrect, newAccuracy);
+        }
+        return newCorrect;
+      });
       const newStreak = streak + 1;
       setStreak(newStreak);
       if (newStreak > maxStreak) setMaxStreak(newStreak);

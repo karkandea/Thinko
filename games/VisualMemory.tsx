@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 interface VisualMemoryProps {
   onComplete: (score: number, maxLevel: number) => void;
+  onScoreUpdate?: (score: number, level: number) => void;
   isPaused?: boolean;
 }
 
@@ -23,7 +24,7 @@ const getLevelConfig = (level: number) => {
   return { gridSize, tileCount, previewTime };
 };
 
-export default function VisualMemory({ onComplete, isPaused = false }: VisualMemoryProps) {
+export default function VisualMemory({ onComplete, onScoreUpdate, isPaused = false }: VisualMemoryProps) {
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
   const [sequence, setSequence] = useState<number[]>([]);
@@ -110,6 +111,11 @@ export default function VisualMemory({ onComplete, isPaused = false }: VisualMem
         
         const newLevel = level + 1;
         if (newLevel > maxLevel) setMaxLevel(newLevel);
+        
+        // Report score for real-time tracking
+        if (onScoreUpdate) {
+          onScoreUpdate(score + levelBonus + streakBonus, newLevel);
+        }
         
         setGameState('correct');
         

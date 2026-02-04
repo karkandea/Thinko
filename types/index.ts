@@ -3,7 +3,7 @@ export interface GameProps {
   title: string;
   description: string;
   estimatedTime: string;
-  icon: string;
+  icon: React.ReactNode;
   slug: string;
 }
 

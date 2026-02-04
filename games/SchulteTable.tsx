@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 interface SchulteTableProps {
   onComplete: (timeMs: number, level: number) => void;
+  onScoreUpdate?: (timeMs: number, level: number) => void; // Real-time score tracking
   isPaused?: boolean;
 }
 
@@ -20,7 +21,7 @@ const LEVEL_CONFIG = [
 
 const MAX_LEVEL = LEVEL_CONFIG.length;
 
-export default function SchulteTable({ onComplete, isPaused = false }: SchulteTableProps) {
+export default function SchulteTable({ onComplete, onScoreUpdate, isPaused = false }: SchulteTableProps) {
   const [pausedTime, setPausedTime] = useState(0);
   const pauseStartRef = useRef<number | null>(null);
   const [level, setLevel] = useState(1);
@@ -111,6 +112,11 @@ export default function SchulteTable({ onComplete, isPaused = false }: SchulteTa
         const levelTime = Date.now() - (startTime || 0);
         const newTotalTime = totalTime + levelTime;
         setTotalTime(newTotalTime);
+        
+        // Report score for real-time tracking
+        if (onScoreUpdate) {
+          onScoreUpdate(newTotalTime, level);
+        }
         
         if (timerRef.current) clearInterval(timerRef.current);
         

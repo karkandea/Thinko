@@ -1,25 +1,35 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import GameContainer from '@/components/GameContainer';
+import GameLobby from '@/components/GameLobby';
 import RapidMath from '@/games/RapidMath';
 import CompletionScreen from '@/components/CompletionScreen';
 import TutorialModal from '@/components/TutorialModal';
 import Leaderboard from '@/components/Leaderboard';
 import { PauseOverlay, StopConfirmModal } from '@/components/GameControls';
 import { useAuth } from '@/lib/auth-context';
-import { saveGameScore, getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
+import { getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
+import { useBestScoreTracker } from '@/lib/useBestScoreTracker';
 
 export default function RapidMathPage() {
-  const router = useRouter();
   const { user } = useAuth();
-  const [gameState, setGameState] = useState<'tutorial' | 'playing' | 'completed'>('tutorial');
+  const { reportScore, isNewRecord } = useBestScoreTracker({ gameSlug: 'rapid-math' });
+  const [gameState, setGameState] = useState<'lobby' | 'tutorial' | 'playing' | 'completed'>('lobby');
   const [lastScore, setLastScore] = useState(0);
   const [lastAccuracy, setLastAccuracy] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Real-time score update handler
+  const handleScoreUpdate = (score: number, accuracy: number) => {
+    reportScore(score, { accuracy });
+  };
+
+  const handlePlay = () => {
+    setGameState('tutorial');
+  };
 
   const handleTutorialClose = () => {
     setGameState('playing');
@@ -30,14 +40,16 @@ export default function RapidMathPage() {
     setLastAccuracy(accuracy);
     setGameState('completed');
 
+    // Report final score
+    reportScore(score, { accuracy });
+
     if (user) {
       setIsSaving(true);
       try {
         await getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
-        await saveGameScore(user.uid, 'rapid-math', score, undefined, accuracy);
         await incrementGamesPlayed(user.uid);
       } catch (error) {
-        console.error('Failed to save score:', error);
+        console.error('Failed to save:', error);
       } finally {
         setIsSaving(false);
       }
@@ -46,6 +58,11 @@ export default function RapidMathPage() {
 
   const handlePlayAgain = () => {
     setGameState('tutorial');
+    setIsPaused(false);
+  };
+
+  const handleBackToLobby = () => {
+    setGameState('lobby');
     setIsPaused(false);
   };
 
@@ -58,7 +75,7 @@ export default function RapidMathPage() {
 
   const handleStopConfirm = () => {
     setShowStopConfirm(false);
-    router.push('/');
+    setGameState('lobby');
   };
 
   const handleStopCancel = () => {
@@ -72,6 +89,19 @@ export default function RapidMathPage() {
     if (lastScore >= 10) return 'average';
     return 'tryAgain';
   };
+
+  if (gameState === 'lobby') {
+    return (
+      <GameLobby
+        gameSlug="rapid-math"
+        gameTitle="Hitung Cepat"
+        gameDescription="Selesaikan soal matematika secepat mungkin sebelum waktu habis."
+        gameIcon="🔢"
+        onPlay={handlePlay}
+        scoreFormatter={(s) => `${s} benar`}
+      />
+    );
+  }
 
   return (
     <GameContainer 
@@ -88,7 +118,7 @@ export default function RapidMathPage() {
       
       {gameState === 'playing' && (
         <>
-          <RapidMath onComplete={handleComplete} isPaused={isPaused} />
+          <RapidMath onComplete={handleComplete} onScoreUpdate={handleScoreUpdate} isPaused={isPaused} />
           {isPaused && !showStopConfirm && <PauseOverlay onResume={handleResume} />}
         </>
       )}
@@ -101,9 +131,16 @@ export default function RapidMathPage() {
             onPlayAgain={handlePlayAgain}
             rating={getRating()}
             extraStats={[{ label: 'Accuracy', value: `${lastAccuracy}%` }]}
+            isNewRecord={isNewRecord}
           />
           {isSaving && <p className="text-center text-sm text-slate-500">Menyimpan skor...</p>}
           <Leaderboard gameSlug="rapid-math" gameTitle="Hitung Cepat" scoreFormatter={(s) => `${s} benar`} />
+          <button
+            onClick={handleBackToLobby}
+            className="w-full py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-medium transition-colors"
+          >
+            ← Kembali ke Lobby
+          </button>
         </div>
       )}
 

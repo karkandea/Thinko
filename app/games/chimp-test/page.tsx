@@ -1,51 +1,73 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useCallback, useEffect } from 'react';
 import GameContainer from '@/components/GameContainer';
+import GameLobby from '@/components/GameLobby';
 import ChimpTest from '@/games/ChimpTest';
 import CompletionScreen from '@/components/CompletionScreen';
 import TutorialModal from '@/components/TutorialModal';
 import Leaderboard from '@/components/Leaderboard';
 import { PauseOverlay, StopConfirmModal } from '@/components/GameControls';
 import { useAuth } from '@/lib/auth-context';
-import { saveGameScore, getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
+import { useBestScoreTracker } from '@/lib/useBestScoreTracker';
+import { getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
 
 export default function ChimpTestPage() {
-  const router = useRouter();
   const { user } = useAuth();
-  const [gameState, setGameState] = useState<'tutorial' | 'playing' | 'completed'>('tutorial');
+  const [gameState, setGameState] = useState<'lobby' | 'tutorial' | 'playing' | 'completed'>('lobby');
   const [lastLevel, setLastLevel] = useState(0);
   const [lastStreak, setLastStreak] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
+  // Initialize profile on first play
+  useEffect(() => {
+    if (user && gameState === 'playing') {
+      getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
+    }
+  }, [user, gameState]);
+
+  // Real-time best score tracker - higher level is better
+  const { personalBest, isNewRecord, reportScore, resetNewRecordFlag } = useBestScoreTracker({
+    gameSlug: 'chimp-test',
+    lowerIsBetter: false,
+  });
+
+  const handlePlay = () => {
+    setGameState('tutorial');
+    resetNewRecordFlag();
+  };
 
   const handleTutorialClose = () => {
     setGameState('playing');
   };
+
+  // Called during gameplay when level changes
+  const handleScoreUpdate = useCallback((level: number, maxStreak: number) => {
+    reportScore(level, { level, extraStats: { maxStreak } });
+  }, [reportScore]);
 
   const handleComplete = async (level: number, maxStreak: number) => {
     setLastLevel(level);
     setLastStreak(maxStreak);
     setGameState('completed');
 
+    // Final score save
+    reportScore(level, { level, extraStats: { maxStreak } });
+
     if (user) {
-      setIsSaving(true);
-      try {
-        await getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
-        await saveGameScore(user.uid, 'chimp-test', level, level, undefined, { maxStreak });
-        await incrementGamesPlayed(user.uid);
-      } catch (error) {
-        console.error('Failed to save score:', error);
-      } finally {
-        setIsSaving(false);
-      }
+      await incrementGamesPlayed(user.uid);
     }
   };
 
   const handlePlayAgain = () => {
     setGameState('tutorial');
+    setIsPaused(false);
+    resetNewRecordFlag();
+  };
+
+  const handleBackToLobby = () => {
+    setGameState('lobby');
     setIsPaused(false);
   };
 
@@ -58,7 +80,7 @@ export default function ChimpTestPage() {
 
   const handleStopConfirm = () => {
     setShowStopConfirm(false);
-    router.push('/');
+    setGameState('lobby');
   };
 
   const handleStopCancel = () => {
@@ -72,6 +94,19 @@ export default function ChimpTestPage() {
     if (lastLevel >= 5) return 'average';
     return 'tryAgain';
   };
+
+  if (gameState === 'lobby') {
+    return (
+      <GameLobby
+        gameSlug="chimp-test"
+        gameTitle="Tes Simpanse"
+        gameDescription="Uji memori kerja dengan mengingat posisi angka yang muncul sekilas."
+        gameIcon="🐒"
+        onPlay={handlePlay}
+        scoreFormatter={(s) => `Level ${s}`}
+      />
+    );
+  }
 
   return (
     <GameContainer 
@@ -88,7 +123,11 @@ export default function ChimpTestPage() {
       
       {gameState === 'playing' && (
         <>
-          <ChimpTest onComplete={handleComplete} isPaused={isPaused} />
+          <ChimpTest 
+            onComplete={handleComplete} 
+            onScoreUpdate={handleScoreUpdate}
+            isPaused={isPaused} 
+          />
           {isPaused && !showStopConfirm && <PauseOverlay onResume={handleResume} />}
         </>
       )}
@@ -100,10 +139,19 @@ export default function ChimpTestPage() {
             scoreDisplay={`Level ${lastLevel}`}
             onPlayAgain={handlePlayAgain}
             rating={getRating()}
-            extraStats={[{ label: 'Max Streak', value: `${lastStreak}` }]}
+            isNewRecord={isNewRecord}
+            extraStats={[
+              { label: 'Max Streak', value: `${lastStreak}` },
+              ...(personalBest ? [{ label: 'Best', value: `Level ${personalBest}` }] : []),
+            ]}
           />
-          {isSaving && <p className="text-center text-sm text-slate-500">Menyimpan skor...</p>}
           <Leaderboard gameSlug="chimp-test" gameTitle="Tes Simpanse" scoreFormatter={(s) => `Level ${s}`} />
+          <button
+            onClick={handleBackToLobby}
+            className="w-full py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-medium transition-colors"
+          >
+            ← Kembali ke Lobby
+          </button>
         </div>
       )}
 

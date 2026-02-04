@@ -1,61 +1,80 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useCallback, useEffect } from 'react';
 import GameContainer from '@/components/GameContainer';
+import GameLobby from '@/components/GameLobby';
 import ReactionTime from '@/games/ReactionTime';
 import CompletionScreen from '@/components/CompletionScreen';
 import TutorialModal from '@/components/TutorialModal';
 import Leaderboard from '@/components/Leaderboard';
 import { StopConfirmModal } from '@/components/GameControls';
 import { useAuth } from '@/lib/auth-context';
-import { saveGameScore, getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
+import { useBestScoreTracker } from '@/lib/useBestScoreTracker';
+import { getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
 
 export default function ReactionTimePage() {
-  const router = useRouter();
   const { user } = useAuth();
-  const [gameState, setGameState] = useState<'tutorial' | 'playing' | 'completed'>('tutorial');
+  const [gameState, setGameState] = useState<'lobby' | 'tutorial' | 'playing' | 'completed'>('lobby');
   const [avgTime, setAvgTime] = useState(0);
   const [bestTime, setBestTime] = useState(0);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
+  // Initialize profile on first play
+  useEffect(() => {
+    if (user && gameState === 'playing') {
+      getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
+    }
+  }, [user, gameState]);
+
+  // Real-time best score tracker - lower time is better
+  const { personalBest, isNewRecord, reportScore, resetNewRecordFlag } = useBestScoreTracker({
+    gameSlug: 'reaction-time',
+    lowerIsBetter: true,
+  });
+
+  const handlePlay = () => {
+    setGameState('tutorial');
+    resetNewRecordFlag();
+  };
 
   const handleTutorialClose = () => {
     setGameState('playing');
   };
+
+  // Called during gameplay when a reaction time is recorded
+  const handleScoreUpdate = useCallback((reactionMs: number) => {
+    reportScore(Math.round(reactionMs));
+  }, [reportScore]);
 
   const handleComplete = async (avgMs: number, bestMs: number) => {
     setAvgTime(avgMs);
     setBestTime(bestMs);
     setGameState('completed');
 
+    // Final score save - use best time
+    reportScore(Math.round(bestMs));
+
     if (user) {
-      setIsSaving(true);
-      try {
-        await getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
-        // Lower is better for reaction time, so we use negative for sorting
-        await saveGameScore(user.uid, 'reaction-time', Math.round(avgMs), undefined, undefined, { bestTime: bestMs });
-        await incrementGamesPlayed(user.uid);
-      } catch (error) {
-        console.error('Failed to save score:', error);
-      } finally {
-        setIsSaving(false);
-      }
+      await incrementGamesPlayed(user.uid);
     }
   };
 
   const handlePlayAgain = () => {
     setGameState('tutorial');
+    resetNewRecordFlag();
   };
 
-  // Reaction time doesn't have pause - just stop
+  const handleBackToLobby = () => {
+    setGameState('lobby');
+  };
+
   const handleStop = useCallback(() => {
     setShowStopConfirm(true);
   }, []);
 
   const handleStopConfirm = () => {
     setShowStopConfirm(false);
-    router.push('/');
+    setGameState('lobby');
   };
 
   const handleStopCancel = () => {
@@ -68,6 +87,20 @@ export default function ReactionTimePage() {
     if (avgTime < 350) return 'average';
     return 'tryAgain';
   };
+
+  if (gameState === 'lobby') {
+    return (
+      <GameLobby
+        gameSlug="reaction-time"
+        gameTitle="Tes Reaksi"
+        gameDescription="Ukur seberapa cepat refleks kamu merespon perubahan warna."
+        gameIcon="⚡"
+        onPlay={handlePlay}
+        scoreFormatter={(s) => `${s}ms`}
+        lowerIsBetter={true}
+      />
+    );
+  }
 
   return (
     <GameContainer 
@@ -84,7 +117,10 @@ export default function ReactionTimePage() {
       )}
       
       {gameState === 'playing' && (
-        <ReactionTime onComplete={handleComplete} />
+        <ReactionTime 
+          onComplete={handleComplete}
+          onScoreUpdate={handleScoreUpdate}
+        />
       )}
       
       {gameState === 'completed' && (
@@ -94,10 +130,19 @@ export default function ReactionTimePage() {
             scoreDisplay={`${Math.round(avgTime)}ms`}
             onPlayAgain={handlePlayAgain}
             rating={getRating()}
-            extraStats={[{ label: 'Best', value: `${Math.round(bestTime)}ms` }]}
+            isNewRecord={isNewRecord}
+            extraStats={[
+              { label: 'Best', value: `${Math.round(bestTime)}ms` },
+              ...(personalBest ? [{ label: 'Record', value: `${personalBest}ms` }] : []),
+            ]}
           />
-          {isSaving && <p className="text-center text-sm text-slate-500">Menyimpan skor...</p>}
           <Leaderboard gameSlug="reaction-time" gameTitle="Tes Reaksi" scoreFormatter={(s) => `${s}ms`} lowerIsBetter={true} />
+          <button
+            onClick={handleBackToLobby}
+            className="w-full py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-medium transition-colors"
+          >
+            ← Kembali ke Lobby
+          </button>
         </div>
       )}
 

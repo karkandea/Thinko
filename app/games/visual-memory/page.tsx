@@ -1,51 +1,73 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useCallback, useEffect } from 'react';
 import GameContainer from '@/components/GameContainer';
+import GameLobby from '@/components/GameLobby';
 import VisualMemory from '@/games/VisualMemory';
 import CompletionScreen from '@/components/CompletionScreen';
 import TutorialModal from '@/components/TutorialModal';
 import Leaderboard from '@/components/Leaderboard';
 import { PauseOverlay, StopConfirmModal } from '@/components/GameControls';
 import { useAuth } from '@/lib/auth-context';
-import { saveGameScore, getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
+import { useBestScoreTracker } from '@/lib/useBestScoreTracker';
+import { getOrCreateUserProfile, incrementGamesPlayed } from '@/lib/db';
 
 export default function VisualMemoryPage() {
-  const router = useRouter();
   const { user } = useAuth();
-  const [gameState, setGameState] = useState<'tutorial' | 'playing' | 'completed'>('tutorial');
+  const [gameState, setGameState] = useState<'lobby' | 'tutorial' | 'playing' | 'completed'>('lobby');
   const [lastScore, setLastScore] = useState(0);
   const [lastLevel, setLastLevel] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
+  // Initialize profile on first play
+  useEffect(() => {
+    if (user && gameState === 'playing') {
+      getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
+    }
+  }, [user, gameState]);
+
+  // Real-time best score tracker - higher score is better
+  const { personalBest, isNewRecord, reportScore, resetNewRecordFlag } = useBestScoreTracker({
+    gameSlug: 'visual-memory',
+    lowerIsBetter: false,
+  });
+
+  const handlePlay = () => {
+    setGameState('tutorial');
+    resetNewRecordFlag();
+  };
 
   const handleTutorialClose = () => {
     setGameState('playing');
   };
+
+  // Called during gameplay when score changes
+  const handleScoreUpdate = useCallback((score: number, level: number) => {
+    reportScore(score, { level });
+  }, [reportScore]);
 
   const handleComplete = async (score: number, maxLevel: number) => {
     setLastScore(score);
     setLastLevel(maxLevel);
     setGameState('completed');
 
+    // Final score save
+    reportScore(score, { level: maxLevel });
+
     if (user) {
-      setIsSaving(true);
-      try {
-        await getOrCreateUserProfile(user.uid, user.displayName || 'Anonymous', user.email || '', user.photoURL || '');
-        await saveGameScore(user.uid, 'visual-memory', score, maxLevel);
-        await incrementGamesPlayed(user.uid);
-      } catch (error) {
-        console.error('Failed to save score:', error);
-      } finally {
-        setIsSaving(false);
-      }
+      await incrementGamesPlayed(user.uid);
     }
   };
 
   const handlePlayAgain = () => {
     setGameState('tutorial');
+    setIsPaused(false);
+    resetNewRecordFlag();
+  };
+
+  const handleBackToLobby = () => {
+    setGameState('lobby');
     setIsPaused(false);
   };
 
@@ -58,7 +80,7 @@ export default function VisualMemoryPage() {
 
   const handleStopConfirm = () => {
     setShowStopConfirm(false);
-    router.push('/');
+    setGameState('lobby');
   };
 
   const handleStopCancel = () => {
@@ -72,6 +94,19 @@ export default function VisualMemoryPage() {
     if (lastLevel >= 4) return 'average';
     return 'tryAgain';
   };
+
+  if (gameState === 'lobby') {
+    return (
+      <GameLobby
+        gameSlug="visual-memory"
+        gameTitle="Memori Visual"
+        gameDescription="Ingat pola kotak yang muncul dan klik posisi yang tepat."
+        gameIcon="🧠"
+        onPlay={handlePlay}
+        scoreFormatter={(s) => `${s} poin`}
+      />
+    );
+  }
 
   return (
     <GameContainer 
@@ -88,7 +123,11 @@ export default function VisualMemoryPage() {
       
       {gameState === 'playing' && (
         <>
-          <VisualMemory onComplete={handleComplete} isPaused={isPaused} />
+          <VisualMemory 
+            onComplete={handleComplete} 
+            onScoreUpdate={handleScoreUpdate}
+            isPaused={isPaused} 
+          />
           {isPaused && !showStopConfirm && <PauseOverlay onResume={handleResume} />}
         </>
       )}
@@ -100,10 +139,19 @@ export default function VisualMemoryPage() {
             scoreDisplay={`${lastScore} Poin`}
             onPlayAgain={handlePlayAgain}
             rating={getRating()}
-            extraStats={[{ label: 'Max Level', value: `${lastLevel}` }]}
+            isNewRecord={isNewRecord}
+            extraStats={[
+              { label: 'Max Level', value: `${lastLevel}` },
+              ...(personalBest ? [{ label: 'Best', value: `${personalBest} poin` }] : []),
+            ]}
           />
-          {isSaving && <p className="text-center text-sm text-slate-500">Menyimpan skor...</p>}
           <Leaderboard gameSlug="visual-memory" gameTitle="Memori Visual" scoreFormatter={(s) => `${s} poin`} />
+          <button
+            onClick={handleBackToLobby}
+            className="w-full py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-medium transition-colors"
+          >
+            ← Kembali ke Lobby
+          </button>
         </div>
       )}
 

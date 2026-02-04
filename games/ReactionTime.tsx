@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 interface ReactionTimeProps {
   onComplete: (averageTimeMs: number, bestTimeMs: number) => void;
+  onScoreUpdate?: (reactionMs: number) => void;
 }
 
 type Mode = 'waiting' | 'ready' | 'now' | 'clicked' | 'tooEarly';
@@ -14,7 +15,7 @@ const getLevelConfig = (round: number) => ({
   maxDelay: Math.max(4000 - (round * 200), 2000), // Max wait time decreases
 });
 
-export default function ReactionTime({ onComplete }: ReactionTimeProps) {
+export default function ReactionTime({ onComplete, onScoreUpdate }: ReactionTimeProps) {
   const [mode, setMode] = useState<Mode>('waiting');
   const [message, setMessage] = useState('Tap di mana aja buat mulai');
   const [startTime, setStartTime] = useState(0);
@@ -82,6 +83,10 @@ export default function ReactionTime({ onComplete }: ReactionTimeProps) {
       
       if (reaction < bestTime) {
         setBestTime(reaction);
+        // Report new best score for real-time tracking
+        if (onScoreUpdate) {
+          onScoreUpdate(reaction);
+        }
       }
       
       if (newTimes.length >= ROUNDS) {
